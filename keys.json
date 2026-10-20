@@ -1,0 +1,33 @@
+{
+    "stock": {},
+    "claimed": {
+        "1540011963940212876": {
+            "username": "ahmi0488",
+            "key": "jhg",
+            "claimed_at": "2026-10-19 09:02:41 UTC",
+            "expires_at": "2026-10-20 09:02:41 UTC",
+            "duration": "1 DAY(S)",
+            "status": "ACTIVE"
+        }
+    },
+    "owner_claims": [
+        {
+            "username": "axbofficial67",
+            "user_id": "1312467813771907173",
+            "key": "AXBPREMIUMHMHG",
+            "claimed_at": "2026-10-19 08:50:24 UTC",
+            "expires_at": "2026-10-20 08:50:24 UTC",
+            "duration": "1 DAY(S)",
+            "status": "ACTIVE"
+        },
+        {
+            "username": "axbofficial67",
+            "user_id": "1312467813771907173",
+            "key": "axb",
+            "claimed_at": "2026-10-19 16:47:34 UTC",
+            "expires_at": "2026-10-20 16:47:34 UTC",
+            "duration": "1 DAY(S)",
+            "status": "ACTIVE"
+        }
+    ]
+}
