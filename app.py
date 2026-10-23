@@ -3,7 +3,6 @@ import json
 import asyncio
 import secrets
 import string
-import io
 from datetime import datetime, timedelta, timezone
 
 import discord
@@ -20,27 +19,30 @@ try:
 except ValueError:
     OWNER_ID = 0
 
+# Server Lock ID (0 = all servers allowed)
 try:
     ALLOWED_GUILD_ID = int(os.getenv("ALLOWED_GUILD_ID", "0").strip())
 except ValueError:
     ALLOWED_GUILD_ID = 0
 
+# Channel Lock ID (0 = all channels allowed)
 try:
     ALLOWED_CHANNEL_ID = int(os.getenv("ALLOWED_CHANNEL_ID", "0").strip())
 except ValueError:
     ALLOWED_CHANNEL_ID = 0
 
+# Log Channel ID
 try:
     LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", "0").strip())
 except ValueError:
     LOG_CHANNEL_ID = 0
 
+# ✅ WORKING GIF URL (direct .gif link)
 GIF_URL = "https://imagetourl.cloud/78y8cpendiyh.gif"
 
 KEYS_FILE = "keys.json"
 ACCESS_FILE = "access_codes.json"
 SETTINGS_FILE = "settings.json"
-BLOCKED_FILE = "blocked_channels.json"
 
 claim_lock = asyncio.Lock()
 
@@ -48,81 +50,15 @@ ALLOWED_GUILDS = set()
 if ALLOWED_GUILD_ID != 0:
     ALLOWED_GUILDS.add(ALLOWED_GUILD_ID)
 
-BLOCKED_CHANNEL_IDS = set()
-
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
 intents.members = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
-
-# 🎨 THEME COLORS (All Red)
-COLOR_RED = discord.Color.from_rgb(239, 68, 68)
-COLOR_DARK_RED = discord.Color.from_rgb(220, 38, 38)
-
-
-# =========================
-# BLOCKED CHANNELS — LOAD / SAVE
-# =========================
-
-def load_blocked_channels():
-    global BLOCKED_CHANNEL_IDS
-    BLOCKED_CHANNEL_IDS = set()
-
-    if not os.path.exists(BLOCKED_FILE):
-        return
-
-    try:
-        with open(BLOCKED_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        if isinstance(data, dict):
-            data = data.get("blocked", [])
-
-        if isinstance(data, list):
-            for cid in data:
-                try:
-                    cid_int = int(cid)
-                    if cid_int > 0:
-                        BLOCKED_CHANNEL_IDS.add(cid_int)
-                except (ValueError, TypeError):
-                    continue
-    except (json.JSONDecodeError, OSError) as e:
-        print(f"⚠️ blocked_channels.json load error: {e}")
-
-
-def save_blocked_channels():
-    try:
-        if not BLOCKED_CHANNEL_IDS:
-            if os.path.exists(BLOCKED_FILE):
-                os.remove(BLOCKED_FILE)
-            return
-
-        with open(BLOCKED_FILE, "w", encoding="utf-8") as f:
-            json.dump(sorted(BLOCKED_CHANNEL_IDS), f, indent=4)
-    except OSError as e:
-        print(f"⚠️ blocked_channels.json save error: {e}")
-
-
-def is_blocked_channel(channel_id: int) -> bool:
-    return channel_id in BLOCKED_CHANNEL_IDS
-
-
-load_blocked_channels()
-
-
-# =========================
-# 🔒 LAYER 1: ! PREFIX COMMANDS — COMPLETELY SILENT
-# =========================
-
-@bot.check
-async def globally_block_channels(ctx: commands.Context):
-    if ctx.guild is None:
-        return True
-    if is_blocked_channel(ctx.channel.id):
-        return False
-    return True
+bot = commands.Bot(
+    command_prefix="!",
+    intents=intents
+)
 
 
 # =========================
@@ -130,19 +66,13 @@ async def globally_block_channels(ctx: commands.Context):
 # =========================
 def owner_only():
     async def predicate(interaction: discord.Interaction) -> bool:
-        if is_blocked_channel(interaction.channel_id):
-            return False
-
         if interaction.user.id != OWNER_ID:
             embed = discord.Embed(
                 title="❌ ACCESS DENIED",
-                description="This command is for the **Bot Owner** only.",
-                color=COLOR_RED
+                description="Yeh command sirf **Bot Owner** use kar sakta hai.",
+                color=discord.Color.red()
             )
-            try:
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-            except Exception:
-                pass
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return False
         return True
     return app_commands.check(predicate)
@@ -250,6 +180,11 @@ def save_access_codes(data):
     os.replace(temp, ACCESS_FILE)
 
 
+def generate_code(length=8):
+    chars = string.ascii_uppercase + string.digits
+    return "AXB-" + "".join(secrets.choice(chars) for _ in range(length))
+
+
 # =========================
 # CHECKS
 # =========================
@@ -273,14 +208,16 @@ def is_allowed_channel(user_id: int, channel_id: int):
 
 
 # =========================
-# EMBEDS (ALL RED)
+# EMBEDS (GIF ADDED HERE)
 # =========================
 
 def success_embed(user, key, expires_at, days, access_name="PREMIUM"):
     embed = discord.Embed(
         title="💎 LIB BYPASS KEY ACTIVATED 💎",
-        color=COLOR_RED
+        color=discord.Color.from_rgb(147, 51, 234)
     )
+
+    # ✅ GIF as big image
     if GIF_URL and GIF_URL.startswith("http"):
         embed.set_image(url=GIF_URL)
 
@@ -290,7 +227,7 @@ def success_embed(user, key, expires_at, days, access_name="PREMIUM"):
     embed.add_field(name="👤 USER", value=user.mention, inline=True)
     embed.add_field(name="🟢 STATUS", value="✅ ACTIVE", inline=True)
     embed.add_field(name="👑 ACCESS", value=f"{access_name}", inline=True)
-    embed.add_field(name="🔒 HWID", value="LOOK", inline=True)
+    embed.add_field(name="🔒HWID", value="LOOK", inline=True)
     embed.add_field(name="📅 ACTIVE", value=f"{days} DAY", inline=True)
     embed.add_field(name="⏰ EXPIRES ON", value=f"{expires_at.strftime('%d-%m-%Y %H:%M')}", inline=True)
     embed.set_footer(text="AXB OFFICIAL")
@@ -301,7 +238,7 @@ def error_embed(title: str, description: str):
     embed = discord.Embed(
         title=f"❌ {title}",
         description=description,
-        color=COLOR_RED
+        color=discord.Color.from_rgb(239, 68, 68)
     )
     embed.set_footer(text="AXB OFFICIAL")
     return embed
@@ -318,7 +255,7 @@ async def send_log(user, key, days, access_name):
         channel = bot.get_channel(LOG_CHANNEL_ID)
         if not channel:
             return
-        log_embed = discord.Embed(title="📝 NEW KEY CLAIMED", color=COLOR_RED)
+        log_embed = discord.Embed(title="📝 NEW KEY CLAIMED", color=discord.Color.green())
         log_embed.set_thumbnail(url=user.display_avatar.url)
         log_embed.add_field(name="👤 User", value=user.mention, inline=True)
         log_embed.add_field(name="🆔 User ID", value=f"`{user.id}`", inline=True)
@@ -332,30 +269,24 @@ async def send_log(user, key, days, access_name):
 
 
 # =========================
-# BOT EVENTS
+# BOT EVENTS (SINGLE CLEAN on_ready)
 # =========================
 
 @bot.event
 async def on_ready():
     create_keys_file()
     load_settings()
-    load_blocked_channels()
 
     tree_cmds = bot.tree.get_commands()
-    print(f"🔍 DEBUG: {len(tree_cmds)} commands loaded in tree:")
+    print(f"🔍 DEBUG: Tree mein {len(tree_cmds)} commands hain:")
     for cmd in tree_cmds:
         print(f"   - /{cmd.name}")
-
-    if BLOCKED_CHANNEL_IDS:
-        print(f"🚫 BLOCKED CHANNEL(S) — bot will be COMPLETELY SILENT in these channels:")
-        for cid in sorted(BLOCKED_CHANNEL_IDS):
-            print(f"   - {cid}")
-    else:
-        print(f"✅ No blocked channels (file '{BLOCKED_FILE}' missing or empty).")
 
     try:
         if ALLOWED_GUILD_ID != 0:
             guild_obj = discord.Object(id=ALLOWED_GUILD_ID)
+
+            # ✅ STEP 1: Guild mein commands deploy karein
             bot.tree.copy_global_to(guild=guild_obj)
             synced = await bot.tree.sync(guild=guild_obj)
             print("=" * 55)
@@ -363,6 +294,7 @@ async def on_ready():
             print(f"SLASH COMMANDS SYNCED TO GUILD {ALLOWED_GUILD_ID}: {len(synced)}")
             print("=" * 55)
 
+            # ✅ STEP 2: Discord se GLOBAL commands clear karein (no duplicates)
             try:
                 await bot.http.bulk_upsert_global_commands(bot.application_id, [])
                 print("🧹 Global commands cleared from Discord (no duplicates).")
@@ -400,7 +332,7 @@ async def on_guild_join(guild: discord.Guild):
             embed = discord.Embed(
                 title="🎉 BOT ADDED TO NEW SERVER",
                 description=f"**Server:** {guild.name}\n**ID:** `{guild.id}`",
-                color=COLOR_RED
+                color=discord.Color.from_rgb(147, 51, 234)
             )
             await owner.send(embed=embed)
     except Exception:
@@ -409,11 +341,11 @@ async def on_guild_join(guild: discord.Guild):
 
 @bot.tree.interaction_check
 async def global_server_check(interaction: discord.Interaction) -> bool:
-    if is_blocked_channel(interaction.channel_id):
-        return False
     if ALLOWED_GUILD_ID == 0:
         return True
     if not is_allowed_server(interaction.guild):
+        embed = error_embed("SERVER NOT ALLOWED", "This bot is not authorized to work in this server.")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return False
     return True
 
@@ -431,13 +363,16 @@ async def process_key_claim(user, days):
         days_str = str(days)
 
         if not owner and user_id in data["claimed"]:
-            return error_embed("ALREADY CLAIMED", "You have already claimed a key.\n\n"), None
+            return error_embed(
+                "ALREADY CLAIMED",
+                "\n\n"
+            ), None
 
         stock = data.get("stock", {})
         available = stock.get(days_str, [])
 
         if not available:
-            return error_embed("OUT OF STOCK", f"**{days} DAY** keys are currently out of stock."), None
+            return error_embed("OUT OF STOCK", f"**{days} DAY**"), None
 
         key = str(available.pop(0)).strip()
         if not available:
@@ -473,14 +408,12 @@ async def process_key_claim(user, days):
 
 
 # =========================
-# 🔒 LAYER 3: MESSAGE GUARD — COMPLETELY SILENT
+# AUTO LISTEN: '!free key'
 # =========================
 
 @bot.event
 async def on_message(message: discord.Message):
     if message.author.bot:
-        return
-    if is_blocked_channel(message.channel.id):
         return
 
     content_clean = message.content.strip().lower()
@@ -491,7 +424,7 @@ async def on_message(message: discord.Message):
 
         settings = load_settings()
         if not settings.get("free_key_enabled", True):
-            embed = error_embed("FREE TRIAL IS OFF", "Please **CONTACT THE OWNER** for assistance: <@1312467813771907173>")
+            embed = error_embed("FREE  TRIAL OFF", "**CONECT OWNER**  <@1312467813771907173> ")
             await message.channel.send(embed=embed)
             return
 
@@ -510,7 +443,7 @@ async def on_message(message: discord.Message):
 @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
 async def claim(interaction: discord.Interaction):
     if not is_allowed_channel(interaction.user.id, interaction.channel_id):
-        embed = error_embed("WRONG CHANNEL", f"Please use this command in <#{ALLOWED_CHANNEL_ID}>.")
+        embed = error_embed("WRONG CHANNEL", f"Use in <#{ALLOWED_CHANNEL_ID}>.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
     embed, key = await process_key_claim(interaction.user, 1)
@@ -530,7 +463,7 @@ async def claim(interaction: discord.Interaction):
 ])
 async def create_key_command(interaction: discord.Interaction, days: app_commands.Choice[int]):
     if not is_allowed_channel(interaction.user.id, interaction.channel_id):
-        embed = error_embed("WRONG CHANNEL", f"Please use this command in <#{ALLOWED_CHANNEL_ID}>.")
+        embed = error_embed("WRONG CHANNEL", f"Use in <#{ALLOWED_CHANNEL_ID}>.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
     embed, key = await process_key_claim(interaction.user, days.value)
@@ -541,7 +474,7 @@ async def create_key_command(interaction: discord.Interaction, days: app_command
 
 
 # =========================
-# OWNER COMMANDS
+# OWNER COMMANDS (SECURED)
 # =========================
 
 @bot.tree.command(name="freekey-toggle", description="Owner: Turn !free key system ON or OFF")
@@ -554,15 +487,19 @@ async def create_key_command(interaction: discord.Interaction, days: app_command
 ])
 async def freekey_toggle_command(interaction: discord.Interaction, status: app_commands.Choice[str]):
     settings = load_settings()
+
     if status.value == "on":
         settings["free_key_enabled"] = True
-        msg = "✅ The **!free key** system is now **ON**."
+        msg = "✅ **!free key** system is now **ON**."
+        color = discord.Color.green()
     else:
         settings["free_key_enabled"] = False
-        msg = "🛑 The **!free key** system is now **OFF**."
+        msg = "🛑 **!free key** system is now **OFF**."
+        color = discord.Color.red()
 
     save_settings(settings)
-    embed = discord.Embed(title="⚙️ SYSTEM UPDATED", description=msg, color=COLOR_RED)
+
+    embed = discord.Embed(title="⚙️ SYSTEM UPDATED", description=msg, color=color)
     embed.set_footer(text="AXB OFFICIAL")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -574,7 +511,7 @@ async def freekey_toggle_command(interaction: discord.Interaction, status: app_c
 async def owner_key_command(interaction: discord.Interaction, key: str, days: int):
     key = key.strip()
     if not key or days <= 0:
-        embed = error_embed("INVALID INPUT", "Key or days are invalid.")
+        embed = error_embed("INVALID", "Key/days invalid.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
@@ -583,24 +520,24 @@ async def owner_key_command(interaction: discord.Interaction, key: str, days: in
 
     for d, kl in data["stock"].items():
         if key in kl:
-            embed = error_embed("DUPLICATE KEY", f"This key is already in stock ({d} days).")
+            embed = error_embed("DUPLICATE KEY", f"In stock ({d} days).")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
     for ud in data["claimed"].values():
         if ud.get("key") == key:
-            embed = error_embed("CLAIMED KEY", "This key has already been claimed.")
+            embed = error_embed("CLAIMED KEY", "Already claimed.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
     for od in data.get("owner_claims", []):
         if od.get("key") == key:
-            embed = error_embed("CLAIMED KEY", "This key has already been claimed by the owner.")
+            embed = error_embed("CLAIMED KEY", "Already claimed by owner.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
     data["stock"].setdefault(days_str, []).append(key)
     save_keys(data)
     total = len(data["stock"][days_str])
-    embed = discord.Embed(title="✅ OWNER KEY ADDED", description=f"• **Key:** `{key}`\n• **Days:** `{days}`\n• **Total Stock:** `{total}`", color=COLOR_RED)
+    embed = discord.Embed(title="✅ OWNER KEY ADDED", description=f"• **Key:** `{key}`\n• **Days:** `{days}`\n• **Stock:** `{total}`", color=discord.Color.from_rgb(147, 51, 234))
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
@@ -611,7 +548,7 @@ async def owner_key_command(interaction: discord.Interaction, key: str, days: in
 async def addkey_command(interaction: discord.Interaction, key: str, days: int = 1):
     key = key.strip()
     if not key or days <= 0:
-        embed = error_embed("INVALID INPUT", "Key or days are invalid.")
+        embed = error_embed("INVALID", "Key/days invalid.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
@@ -620,130 +557,26 @@ async def addkey_command(interaction: discord.Interaction, key: str, days: int =
 
     for d, kl in data["stock"].items():
         if key in kl:
-            embed = error_embed("DUPLICATE KEY", f"This key is already in stock ({d} days).")
+            embed = error_embed("DUPLICATE KEY", f"In stock ({d} days).")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
     for ud in data["claimed"].values():
         if ud.get("key") == key:
-            embed = error_embed("CLAIMED KEY", "This key has already been claimed.")
+            embed = error_embed("CLAIMED KEY", "Already claimed.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
     for od in data.get("owner_claims", []):
         if od.get("key") == key:
-            embed = error_embed("CLAIMED KEY", "This key has already been claimed by the owner.")
+            embed = error_embed("CLAIMED KEY", "Already claimed by owner.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
     data["stock"].setdefault(days_str, []).append(key)
     save_keys(data)
     total = len(data["stock"][days_str])
-    embed = discord.Embed(title="✅ KEY ADDED", description=f"• **Key:** `{key}`\n• **Days:** `{days}`\n• **Total Stock:** `{total}`", color=COLOR_RED)
+    embed = discord.Embed(title="✅ KEY ADDED", description=f"• **Key:** `{key}`\n• **Days:** `{days}`\n• **Stock:** `{total}`", color=discord.Color.from_rgb(147, 51, 234))
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-
-# =========================
-# 🆕 UPLOAD KEYS VIA FILE COMMAND
-# =========================
-
-@bot.tree.command(name="upload-keys", description="Owner: Upload a .txt file to add multiple keys to stock")
-@owner_only()
-@app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
-@app_commands.describe(
-    file="The .txt file containing keys (one per line)",
-    days="Duration for these keys in days"
-)
-async def upload_keys_command(
-    interaction: discord.Interaction, 
-    file: discord.Attachment, 
-    days: app_commands.Choice[int] = None
-):
-    # Default duration agar user ne select nahi kiya
-    duration = 1 if days is None else days.value
-
-    # Check karein ke file .txt hai ya nahi
-    if not file.filename.endswith('.txt'):
-        embed = error_embed("INVALID FILE", "Please upload a **.txt** file.")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        return
-
-    # Defer karein taake bot file read karte waqt timeout na ho
-    await interaction.response.defer(ephemeral=True)
-
-    try:
-        # File download karein
-        file_content = await file.read()
-        text = file_content.decode('utf-8')
-        
-        # Har line ko parhein aur khali lines ko ignore karein
-        keys_to_add = [line.strip() for line in text.split('\n') if line.strip()]
-        
-        if not keys_to_add:
-            embed = error_embed("EMPTY FILE", "The file contains no keys.")
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-
-        async with claim_lock:
-            data = load_keys()
-            days_str = str(duration)
-            
-            added_count = 0
-            duplicate_count = 0
-
-            for key in keys_to_add:
-                # Check karein ke key pehle se stock, claimed, ya owner_claims mein hai ya nahi
-                is_dup = False
-                
-                for d, kl in data["stock"].items():
-                    if key in kl:
-                        is_dup = True
-                        break
-                
-                if not is_dup:
-                    for ud in data["claimed"].values():
-                        if ud.get("key") == key:
-                            is_dup = True
-                            break
-                
-                if not is_dup:
-                    for od in data.get("owner_claims", []):
-                        if od.get("key") == key:
-                            is_dup = True
-                            break
-
-                if is_dup:
-                    duplicate_count += 1
-                    continue
-
-                # Add key
-                data["stock"].setdefault(days_str, []).append(key)
-                added_count += 1
-
-            save_keys(data)
-
-        total_stock = len(data["stock"].get(days_str, []))
-
-        embed = discord.Embed(
-            title="📁 KEYS UPLOADED SUCCESSFULLY",
-            description=(
-                f"**Added:** `{added_count}` keys\n"
-                f"**Duplicates Ignored:** `{duplicate_count}` keys\n"
-                f"**Duration:** `{duration} DAY(S)`\n"
-                f"**Total Stock for {duration} Days:** `{total_stock}`"
-            ),
-            color=COLOR_RED
-        )
-        embed.set_footer(text="AXB OFFICIAL")
-        await interaction.followup.send(embed=embed, ephemeral=True)
-
-    except Exception as e:
-        print(f"UPLOAD ERROR: {e}")
-        embed = error_embed("UPLOAD FAILED", "An error occurred while processing the file.")
-        await interaction.followup.send(embed=embed, ephemeral=True)
-
-
-# =========================
-# DELETE COMMAND
-# =========================
 
 @bot.tree.command(name="all-keys-delete", description="Owner: Delete all records")
 @owner_only()
@@ -755,114 +588,7 @@ async def all_keys_delete_command(interaction: discord.Interaction):
         data["claimed"] = {}
         data["owner_claims"] = []
         save_keys(data)
-    embed = discord.Embed(title="🗑️ ALL KEYS DELETED", description="All data has been cleared successfully.", color=COLOR_RED)
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-
-@bot.tree.command(name="claim-reset", description="Owner: Reset ALL user claim records (stock remains safe)")
-@owner_only()
-@app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
-async def claim_reset_command(interaction: discord.Interaction):
-    async with claim_lock:
-        data = load_keys()
-        total_claimed = len(data.get("claimed", {}))
-        data["claimed"] = {}
-        save_keys(data)
-
-    embed = discord.Embed(
-        title="♻️ CLAIM RESET DONE",
-        description=(
-            f"**{total_claimed}** user claim record(s) have been reset.\n\n"
-            "✅ All users can now use `/claim` or `!free key` again.\n"
-            "📦 **Stock:** Safe (not deleted)\n"
-            "👑 **Owner Claims:** Safe"
-        ),
-        color=COLOR_RED
-    )
-    embed.set_footer(text="AXB OFFICIAL")
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-
-# =========================
-# BLOCKED CHANNEL MANAGEMENT COMMANDS
-# =========================
-
-@bot.tree.command(name="block-channel", description="Owner: Block a channel (bot will be COMPLETELY SILENT there)")
-@owner_only()
-@app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
-@app_commands.describe(channel="Channel to block")
-async def block_channel_command(interaction: discord.Interaction, channel: discord.TextChannel):
-    if channel.id in BLOCKED_CHANNEL_IDS:
-        embed = error_embed("ALREADY BLOCKED", f"{channel.mention} is already blocked.")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        return
-
-    BLOCKED_CHANNEL_IDS.add(channel.id)
-    save_blocked_channels()
-
-    embed = discord.Embed(
-        title="🚫 CHANNEL BLOCKED — SILENT MODE",
-        description=(
-            f"{channel.mention} is now **FULLY SILENT BLOCKED**.\n\n"
-            f"⛔ The bot will **NOT** do anything in this channel:\n"
-            f"• `!free key` → **no response**\n"
-            f"• `/claim`, `/create_key` → **no response**\n"
-            f"• Any `!` or `/` command → **no response**\n"
-            f"• No error, no embed, no message — **COMPLETELY SILENT**\n"
-            f"• **Including the owner** (no bypass)\n\n"
-            f"📁 Saved to `{BLOCKED_FILE}`\n"
-            f"🔄 Will persist after restart"
-        ),
-        color=COLOR_RED
-    )
-    embed.set_footer(text="AXB OFFICIAL")
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-
-@bot.tree.command(name="unblock-channel", description="Owner: Unblock a channel")
-@owner_only()
-@app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
-@app_commands.describe(channel="Channel to unblock")
-async def unblock_channel_command(interaction: discord.Interaction, channel: discord.TextChannel):
-    if channel.id not in BLOCKED_CHANNEL_IDS:
-        embed = error_embed("NOT BLOCKED", f"{channel.mention} is not in the blocked list.")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        return
-
-    BLOCKED_CHANNEL_IDS.discard(channel.id)
-    save_blocked_channels()
-
-    embed = discord.Embed(
-        title="✅ CHANNEL UNBLOCKED",
-        description=f"{channel.mention} is now unblocked.\nThe bot can work there normally again.",
-        color=COLOR_RED
-    )
-    embed.set_footer(text="AXB OFFICIAL")
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-
-@bot.tree.command(name="list-blocked-channels", description="Owner: List all blocked channels")
-@owner_only()
-@app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
-async def list_blocked_channels_command(interaction: discord.Interaction):
-    if not BLOCKED_CHANNEL_IDS:
-        embed = discord.Embed(
-            title="📋 BLOCKED CHANNELS",
-            description=f"`No blocked channels.`\n\n_{BLOCKED_FILE} will not be created._",
-            color=COLOR_RED
-        )
-        embed.set_footer(text="AXB OFFICIAL")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        return
-
-    embed = discord.Embed(
-        title=f"🚫 BLOCKED CHANNELS ({len(BLOCKED_CHANNEL_IDS)}) — SILENT MODE",
-        description=f"📁 File: `{BLOCKED_FILE}`\n_The bot will be completely silent in these channels._",
-        color=COLOR_RED
-    )
-    for cid in sorted(BLOCKED_CHANNEL_IDS):
-        embed.add_field(name=f"<#{cid}>", value=f"ID: `{cid}`", inline=False)
-    embed.set_footer(text="AXB OFFICIAL")
+    embed = discord.Embed(title="🗑️ ALL KEYS DELETED", description="Saara data clear kar diya gaya hai.", color=discord.Color.from_rgb(147, 51, 234))
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
@@ -873,11 +599,11 @@ async def key_command(interaction: discord.Interaction):
     data = load_keys()
     oc = data.get("owner_claims", [])
     if not oc:
-        embed = error_embed("NO OWNER KEYS", "No owner claims have been made yet.")
+        embed = error_embed("NO OWNER KEYS", "No owner claims yet.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
     latest = oc[-1]
-    embed = discord.Embed(title="🔑 LATEST OWNER KEY", description=f"```{latest['key']}```", color=COLOR_RED)
+    embed = discord.Embed(title="🔑 LATEST OWNER KEY", description=f"```{latest['key']}```", color=discord.Color.from_rgb(147, 51, 234))
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
@@ -893,7 +619,7 @@ async def status_command(interaction: discord.Interaction):
     elif uid in data["claimed"]:
         ud = data["claimed"][uid]
     else:
-        embed = error_embed("NO KEY FOUND", "No active claim found.")
+        embed = error_embed("NO KEY FOUND", "No active claim.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
@@ -907,7 +633,7 @@ async def status_command(interaction: discord.Interaction):
 
     status = ud.get("status", "UNKNOWN")
     status_text = "`✅ ACTIVE`" if status == "ACTIVE" else "`🔴 EXPIRED`"
-    embed = discord.Embed(title="📊 OWNER TRIAL STATUS", color=COLOR_RED)
+    embed = discord.Embed(title="📊 OWNER TRIAL STATUS", color=discord.Color.from_rgb(147, 51, 234))
     embed.add_field(name="🔑 KEY", value=f"```{ud.get('key', 'N/A')}```", inline=False)
     embed.add_field(name="🟢 STATUS", value=status_text, inline=True)
     embed.add_field(name="📅 DAYS", value=f"`{ud.get('duration', 'N/A')}`", inline=True)
@@ -926,7 +652,7 @@ async def stock_command(interaction: discord.Interaction):
     total_issued = claimed + owner_claimed
     total_stock = sum(len(v) for v in stock.values())
 
-    embed = discord.Embed(title="💎 KEY STOCK (BY DAYS)", color=COLOR_RED)
+    embed = discord.Embed(title="💎 KEY STOCK (BY DAYS)", color=discord.Color.from_rgb(147, 51, 234))
     if not stock:
         embed.add_field(name="📦 STOCK", value="`Empty`", inline=False)
     else:
@@ -940,7 +666,7 @@ async def stock_command(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-@bot.tree.command(name="removeuser", description="Owner: Remove a user's trial claim")
+@bot.tree.command(name="removeuser", description="Owner: Remove user's trial claim")
 @owner_only()
 @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
 @app_commands.describe(user="Discord user")
@@ -948,13 +674,13 @@ async def removeuser_command(interaction: discord.Interaction, user: discord.Use
     data = load_keys()
     uid = str(user.id)
     if uid not in data["claimed"]:
-        embed = error_embed("USER NOT FOUND", "No claim record found for this user.")
+        embed = error_embed("USER NOT FOUND", "No claim record.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
     del data["claimed"][uid]
     save_keys(data)
-    embed = discord.Embed(title="✅ USER REMOVED", description=f"Claim record removed for {user.mention}.", color=COLOR_RED)
+    embed = discord.Embed(title="✅ USER REMOVED", description=f"Claim removed for {user.mention}.", color=discord.Color.from_rgb(147, 51, 234))
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
@@ -964,7 +690,24 @@ async def removeuser_command(interaction: discord.Interaction, user: discord.Use
 async def reloadkeys_command(interaction: discord.Interaction):
     data = load_keys()
     ts = sum(len(v) for v in data.get("stock", {}).values())
-    embed = discord.Embed(title="✅ KEY FILE LOADED", description=f"Stock: `{ts}`\nClaimed: `{len(data['claimed'])}`", color=COLOR_RED)
+    embed = discord.Embed(title="✅ KEY FILE LOADED", description=f"Stock: `{ts}`\nClaimed: `{len(data['claimed'])}`", color=discord.Color.from_rgb(147, 51, 234))
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@bot.tree.command(name="list-access", description="Owner: List all access codes")
+@owner_only()
+@app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
+async def list_access_command(interaction: discord.Interaction):
+    data = load_access_codes()
+    codes = data.get("codes", {})
+    if not codes:
+        embed = error_embed("NO CODES", "No access codes yet.")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+
+    embed = discord.Embed(title=f"📋 ALL ACCESS CODES ({len(codes)})", color=discord.Color.from_rgb(147, 51, 234))
+    for code, info in list(codes.items())[:20]:
+        embed.add_field(name=f"`{code}`", value=f"To: <@{info['given_to']}>\nUses: `{info['uses_left']}`", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
@@ -972,13 +715,13 @@ async def reloadkeys_command(interaction: discord.Interaction):
 @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
 async def check_access_command(interaction: discord.Interaction):
     if not interaction.guild:
-        embed = error_embed("ERROR", "This command can only be used in a server.")
+        embed = error_embed("ERROR", "Server only command.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
     bm = interaction.guild.get_member(bot.user.id)
     if not bm:
-        embed = error_embed("ERROR", "Bot member not found in this server.")
+        embed = error_embed("ERROR", "Bot member not found.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
@@ -993,7 +736,7 @@ async def check_access_command(interaction: discord.Interaction):
         "Slash Commands": perms.use_application_commands,
     }
 
-    embed = discord.Embed(title="🔐 BOT ACCESS STATUS", description=f"**Server:** {interaction.guild.name}", color=COLOR_RED)
+    embed = discord.Embed(title="🔐 BOT ACCESS STATUS", description=f"**Server:** {interaction.guild.name}", color=discord.Color.from_rgb(147, 51, 234) if perms.administrator else discord.Color.orange())
     for name, status in checks.items():
         emoji = "✅" if status else "❌"
         embed.add_field(name=f"{emoji} {name}", value="`Granted`" if status else "`Denied`", inline=True)
@@ -1008,11 +751,11 @@ async def check_access_command(interaction: discord.Interaction):
 async def server_list_command(interaction: discord.Interaction):
     guilds = bot.guilds
     if not guilds:
-        embed = error_embed("NO SERVERS", "The bot is not in any server.")
+        embed = error_embed("NO SERVERS", "Bot is not in any server.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
-    embed = discord.Embed(title=f"🌐 BOT SERVERS ({len(guilds)})", color=COLOR_RED)
+    embed = discord.Embed(title=f"🌐 BOT SERVERS ({len(guilds)})", color=discord.Color.from_rgb(147, 51, 234))
     for i, g in enumerate(guilds[:25], start=1):
         embed.add_field(name=f"{i}. {g.name}", value=f"ID: `{g.id}` | Members: `{g.member_count}`", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -1026,10 +769,8 @@ async def server_list_command(interaction: discord.Interaction):
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.CheckFailure):
         return
-    if is_blocked_channel(interaction.channel_id):
-        return
     print(f"COMMAND ERROR: {error}")
-    embed = error_embed("AN ERROR OCCURRED", "Please try again later.")
+    embed = error_embed("AN ERROR OCCURRED", "Please try again.")
     try:
         if interaction.response.is_done():
             await interaction.followup.send(embed=embed, ephemeral=True)
