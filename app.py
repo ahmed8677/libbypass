@@ -437,7 +437,7 @@ async def process_key_claim(user, days):
         available = stock.get(days_str, [])
 
         if not available:
-            return error_embed("OUT OF STOCK", f"**{days} DAY** keys are currently out of stock."), None
+            return error_embed("OUT OF STOCK", f"**{days} DAY** <@1312467813771907173>."), None
 
         key = str(available.pop(0)).strip()
         if not available:
